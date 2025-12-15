@@ -1,0 +1,21 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+set_and_check(HOLPACA_INCLUDE_DIR "@PACKAGE_INCLUDE_INSTALL_DIR@")
+set_and_check(HOLPACA_CMAKE_DIR "@PACKAGE_CMAKE_INSTALL_DIR@")
+
+find_dependency(cachelib)
+find_dependency(shards)
+find_dependency(Protobuf)
+find_dependency(gRPC)
+find_dependency(GSL)
+
+if (NOT TARGET holpaca)
+  include("${HOLPACA_CMAKE_DIR}/holpaca-targets.cmake")
+endif()
+
+
+if (NOT holpaca_FIND_QUIETLY)
+  message(STATUS "Found holpaca: ${PACKAGE_PREFIX_DIR}")
+endif()

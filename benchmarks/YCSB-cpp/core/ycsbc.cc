@@ -1,0 +1,439 @@
+//
+//  ycsbc.cc
+//  YCSB-cpp
+//
+//  Copyright (c) 2020 Youngjae Lee <ls4154.lee@gmail.com>.
+//  Copyright (c) 2014 Jinglei Ren <jinglei@ren.systems>.
+//
+
+#include <atomic>
+#include <chrono>
+#include <cstring>
+#include <ctime>
+#include <future>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <thread>
+#include <unordered_set>
+#include <vector>
+
+#include "client.h"
+#include "core_workload.h"
+#include "db_factory.h"
+#include "measurements.h"
+#include "timer.h"
+#include "trace_replayer.h"
+#include "utils.h"
+
+#include <ostream>
+
+std::ostream *output_stream = &std::cout;
+
+using namespace std::chrono_literals;
+
+static const std::unordered_set<std::string> kOperationTypes = {
+    "INSERT",
+    "READ",
+    "UPDATE",
+    "SCAN",
+    "READMODIFYWRITE",
+    "DELETE",
+    "INSERT-PASSED",
+    "READ-PASSED",
+    "UPDATE-PASSED",
+    "SCAN-PASSED",
+    "READMODIFYWRITE-PASSED",
+    "DELETE-PASSED",
+    "INSERT-FAILED",
+    "READ-FAILED",
+    "UPDATE-FAILED",
+    "SCAN-FAILED",
+    "READMODIFYWRITE-FAILED",
+    "DELETE-FAILED",
+    "ALL"};
+
+static const std::string WORKLOAD_TYPE_PROPERTY = "workload.type";
+static const std::string WORKLOAD_TYPE_DEFAULT = "synthetic";
+
+static const std::string SLEEP_AFTER_LOAD_PROPERTY = "sleepafterload";
+static const std::string SLEEP_AFTER_LOAD_DEFAULT = "0";
+
+static const std::string MAX_EXECUTION_TIME_PROPERTY = "maxexecutiontime";
+static const std::string MAX_EXECUTION_TIME_DEFAULT = "0";
+
+static const std::string CLEANUP_AFTER_LOAD_PROPERTY = "cleanupafterload";
+static const std::string CLEANUP_AFTER_LOAD_DEFAULT = "false";
+
+static const std::string LOAD_OUTPUT_FILE_PROPERTY = "loadoutputfile";
+
+static const std::string RUN_OUTPUT_FILE_PROPERTY = "runoutputfile";
+
+void UsageMessage(const char *command);
+bool StrStartWith(const char *str, const char *pre);
+void ParseCommandLine(int argc, const char *argv[],
+                      ycsbc::utils::Properties &props);
+
+void StatusThread(std::vector<ycsbc::Measurements *> *measurements,
+                  ycsbc::Measurements *gMeasurements,
+                  std::vector<ycsbc::Operation> *operations,
+                  std::vector<ycsbc::DB *> *dbs, std::atomic_bool *done,
+                  std::chrono::seconds interval = 1s) {
+  using namespace std::chrono;
+
+  auto start = steady_clock::now();
+  while (1) {
+    auto now = steady_clock::now();
+    auto elapsed_time = duration_cast<std::chrono::seconds>(now - start);
+    std::stringstream msg;
+
+    for (long i = 0; i < measurements->size(); i++) {
+      auto const &[cacheName, poolName, occ, cap, gOcc, gCap] =
+          (*dbs)[i]->OccupancyCapacityAndGlobal();
+      msg << elapsed_time.count() << " sec [T-" << i
+          << "]: " << (*measurements)[i]->GetStatusMsg(*operations) << " ("
+          << poolName << "@" << cacheName << ": " << occ << " / " << cap
+          << " | " << gOcc << " / " << gCap << ")" << std::endl;
+    }
+    msg << elapsed_time.count()
+        << " sec [GLOBAL]: " << gMeasurements->GetStatusMsg(*operations)
+        << std::endl;
+    (*output_stream) << msg.str();
+    if (done->load()) {
+      break;
+    }
+    std::this_thread::sleep_until(now + 1s);
+  };
+}
+
+int main(const int argc, const char *argv[]) {
+  ycsbc::utils::Properties props;
+  ParseCommandLine(argc, argv, props);
+
+  const bool do_load = (props.GetProperty("load", "false") == "true");
+  const bool do_transaction = (props.GetProperty("run", "false") == "true");
+  if (!do_load && !do_transaction) {
+    std::cerr << "No operation to do" << std::endl;
+    exit(1);
+  }
+
+  const int num_threads = stoi(props.GetProperty("threadcount", "1"));
+  std::vector<ycsbc::Operation> operationsForStatus;
+  for (int i = 0; i < ycsbc::Operation::MAXOPTYPE; i++) {
+    if (props.ContainsKey("status." +
+                          std::string(ycsbc::kOperationString[i]))) {
+      operationsForStatus.push_back(static_cast<ycsbc::Operation>(i));
+    }
+  }
+
+  std::vector<ycsbc::DB *> dbs;
+  std::vector<ycsbc::Measurements *> measurements;
+  ycsbc::Measurements *gMeasurements = ycsbc::CreateMeasurements(&props);
+  for (int i = 0; i < num_threads; i++) {
+    measurements.push_back(ycsbc::CreateMeasurements(&props));
+    if (measurements[i] == nullptr) {
+      std::cerr << "Unknown measurements name" << std::endl;
+      exit(1);
+    }
+    ycsbc::DB *db =
+        ycsbc::DBFactory::CreateDB(&props, measurements[i], gMeasurements, i);
+    if (db == nullptr) {
+      std::cerr << "Unknown database name " << props["dbname"] << std::endl;
+      exit(1);
+    }
+    dbs.push_back(db);
+  }
+
+  std::vector<ycsbc::CoreWorkload *> wls;
+  for (int i = 0; i < num_threads; i++) {
+    ycsbc::CoreWorkload *wl;
+    if (props.GetProperty(WORKLOAD_TYPE_PROPERTY, WORKLOAD_TYPE_DEFAULT) ==
+        "trace") {
+      wl = new ycsbc::TraceReplayer();
+    } else if (props.GetProperty(WORKLOAD_TYPE_PROPERTY,
+                                 WORKLOAD_TYPE_DEFAULT) == "synthetic") {
+      wl = new ycsbc::CoreWorkload();
+    } else {
+      std::cerr << "Unknown workload type: "
+                << props.GetProperty(WORKLOAD_TYPE_PROPERTY,
+                                     WORKLOAD_TYPE_DEFAULT)
+                << std::endl;
+      exit(1);
+    }
+    wl->Init("." + std::to_string(i), props);
+    wls.emplace_back(wl);
+  }
+
+  const bool show_status = (props.GetProperty("status", "false") == "true");
+  const std::chrono::seconds status_interval = std::chrono::seconds(
+      std::stoi(props.GetProperty("status.interval", "10")));
+
+  if (do_load) {
+
+    std::ofstream ofs;
+    bool redirected_output = false;
+    if (props.ContainsKey(LOAD_OUTPUT_FILE_PROPERTY)) {
+      std::string load_output_file =
+          props.GetProperty(LOAD_OUTPUT_FILE_PROPERTY);
+      redirected_output = true;
+      ofs.open(load_output_file, std::ofstream::out | std::ios::trunc);
+      output_stream = &ofs;
+    }
+
+    std::atomic_bool done(false);
+    CountDownLatch latch(num_threads);
+    ycsbc::utils::Timer<double> timer;
+
+    timer.Start();
+    std::future<void> status_future;
+    if (show_status) {
+      status_future = std::async(
+          std::launch::async, StatusThread, &measurements, gMeasurements,
+          &operationsForStatus, &dbs, &done, status_interval);
+    }
+    std::vector<std::thread> client_threads;
+    for (int i = 0; i < num_threads; ++i) {
+      const long thread_ops = stol(props.GetProperty(
+          ycsbc::CoreWorkload::RECORD_COUNT_PROPERTY + "." + std::to_string(i),
+          props.GetProperty(ycsbc::CoreWorkload::RECORD_COUNT_PROPERTY, "0")));
+
+      const bool cleanup_after_load =
+          (props.GetProperty(
+               CLEANUP_AFTER_LOAD_PROPERTY + "." + std::to_string(i),
+               props.GetProperty(CLEANUP_AFTER_LOAD_PROPERTY,
+                                 CLEANUP_AFTER_LOAD_DEFAULT)) == "true");
+
+      client_threads.emplace_back(std::thread(ycsbc::ClientThread, 0s, 0s, i,
+                                              dbs[i], wls[i], thread_ops, true,
+                                              cleanup_after_load));
+    }
+    assert((int)client_threads.size() == num_threads);
+
+    long sum = 0;
+    for (int i = 0; i < num_threads; i++) {
+      assert(client_threads[i].joinable());
+      client_threads[i].join();
+      sum += wls[i]->GetExecutedOps();
+    }
+    done.store(true);
+    double runtime = timer.End();
+
+    if (show_status) {
+      status_future.wait();
+    }
+
+    (*output_stream) << "Load runtime(sec): " << runtime << std::endl;
+    (*output_stream) << "Load operations(ops): " << sum << std::endl;
+    (*output_stream) << "Load throughput(ops/sec): " << sum / runtime
+                     << std::endl;
+
+    if (redirected_output) {
+      (*output_stream).flush();
+      output_stream = &std::cout;
+      ofs.close();
+    }
+  }
+
+  // reset all measurements
+  for (auto m : measurements) {
+    m->Reset();
+  }
+  gMeasurements->Reset();
+
+  if (do_transaction) {
+
+    std::ofstream ofs;
+    bool redirected_output = false;
+    if (props.ContainsKey(RUN_OUTPUT_FILE_PROPERTY)) {
+      std::string run_output_file = props.GetProperty(RUN_OUTPUT_FILE_PROPERTY);
+      redirected_output = true;
+      ofs.open(run_output_file, std::ofstream::out | std::ios::trunc);
+      output_stream = &ofs;
+    }
+
+    std::atomic_bool done(false);
+    ycsbc::utils::Timer<double> timer;
+
+    timer.Start();
+    std::thread status_thread;
+    if (show_status) {
+      status_thread =
+          std::thread(StatusThread, &measurements, gMeasurements,
+                      &operationsForStatus, &dbs, &done, status_interval);
+    }
+    std::vector<std::thread> client_threads;
+    for (int i = 0; i < num_threads; ++i) {
+      long thread_ops = stol(props.GetProperty(
+          ycsbc::CoreWorkload::OPERATION_COUNT_PROPERTY + "." +
+              std::to_string(i),
+          props.GetProperty(ycsbc::CoreWorkload::OPERATION_COUNT_PROPERTY,
+                            "0")));
+      std::chrono::seconds maxexecutiontime =
+          std::chrono::seconds(stoi(props.GetProperty(
+              MAX_EXECUTION_TIME_PROPERTY + "." + std::to_string(i),
+              props.GetProperty(MAX_EXECUTION_TIME_PROPERTY,
+                                MAX_EXECUTION_TIME_DEFAULT))));
+
+      std::chrono::seconds sleepafterload = std::chrono::seconds(stoi(
+          props.GetProperty(SLEEP_AFTER_LOAD_PROPERTY + "." + std::to_string(i),
+                            props.GetProperty(SLEEP_AFTER_LOAD_PROPERTY,
+                                              SLEEP_AFTER_LOAD_DEFAULT))));
+
+      client_threads.emplace_back(
+          std::thread(ycsbc::ClientThread, sleepafterload, maxexecutiontime, i,
+                      dbs[i], wls[i], thread_ops, false, true));
+    }
+    assert((int)client_threads.size() == num_threads);
+
+    long sum = 0;
+    for (int i = 0; i < num_threads; i++) {
+      assert(client_threads[i].joinable());
+      client_threads[i].join();
+      sum += wls[i]->GetExecutedOps();
+    }
+
+    done.store(true);
+    double runtime = timer.End();
+
+    if (show_status) {
+      status_thread.join();
+    }
+
+    (*output_stream) << "Run runtime(sec): " << runtime << std::endl;
+    (*output_stream) << "Run operations(ops): " << sum << std::endl;
+    (*output_stream) << "Run throughput(ops/sec): " << sum / runtime
+                     << std::endl;
+    (*output_stream) << gMeasurements->GetCDF() << std::endl;
+
+    for (int i = 0; i < num_threads; i++) {
+      delete dbs[i];
+      delete wls[i];
+    }
+
+    if (redirected_output) {
+      (*output_stream).flush();
+      output_stream = &std::cout;
+      ofs.close();
+    }
+  }
+}
+
+void ParseCommandLine(int argc, const char *argv[],
+                      ycsbc::utils::Properties &props) {
+  int argindex = 1;
+  while (argindex < argc && StrStartWith(argv[argindex], "-")) {
+    if (strcmp(argv[argindex], "-load") == 0) {
+      props.SetProperty("load", "true");
+      argindex++;
+    } else if (strcmp(argv[argindex], "-run") == 0 ||
+               strcmp(argv[argindex], "-t") == 0) {
+      props.SetProperty("run", "true");
+      argindex++;
+    } else if (strcmp(argv[argindex], "-threads") == 0) {
+      argindex++;
+      if (argindex >= argc) {
+        UsageMessage(argv[0]);
+        std::cerr << "Missing argument value for -threads" << std::endl;
+        exit(0);
+      }
+      props.SetProperty("threadcount", argv[argindex]);
+      argindex++;
+    } else if (strcmp(argv[argindex], "-db") == 0) {
+      argindex++;
+      if (argindex >= argc) {
+        UsageMessage(argv[0]);
+        std::cerr << "Missing argument value for -db" << std::endl;
+        exit(0);
+      }
+      props.SetProperty("dbname", argv[argindex]);
+      argindex++;
+    } else if (strcmp(argv[argindex], "-P") == 0) {
+      argindex++;
+      if (argindex >= argc) {
+        UsageMessage(argv[0]);
+        std::cerr << "Missing argument value for -P" << std::endl;
+        exit(0);
+      }
+      std::string filename(argv[argindex]);
+      std::ifstream input(argv[argindex]);
+      try {
+        props.Load(input);
+      } catch (const std::string &message) {
+        std::cerr << message << std::endl;
+        exit(0);
+      }
+      input.close();
+      argindex++;
+    } else if (strcmp(argv[argindex], "-p") == 0) {
+      argindex++;
+      if (argindex >= argc) {
+        UsageMessage(argv[0]);
+        std::cerr << "Missing argument value for -p" << std::endl;
+        exit(0);
+      }
+      std::string prop(argv[argindex]);
+      size_t eq = prop.find('=');
+      if (eq == std::string::npos) {
+        std::cerr << "Argument '-p' expected to be in key=value format "
+                     "(e.g., -p operationcount=99999)"
+                  << std::endl;
+        exit(0);
+      }
+      props.SetProperty(ycsbc::utils::Trim(prop.substr(0, eq)),
+                        ycsbc::utils::Trim(prop.substr(eq + 1)));
+      argindex++;
+    } else if (strcmp(argv[argindex], "-s") == 0) {
+      props.SetProperty("status", "true");
+      argindex++;
+      // get list of operations to print in the status message
+      // (space-separated), name must be in uppercase like in the Operation
+      // enum
+      while (argindex < argc && !StrStartWith(argv[argindex], "-")) {
+        if (kOperationTypes.find(std::string(argv[argindex])) !=
+            kOperationTypes.end()) {
+          props.SetProperty("status." + std::string(argv[argindex]), "true");
+          argindex++;
+        } else {
+          UsageMessage(argv[0]);
+          std::cerr << "Unknown operation '" << argv[argindex] << "'"
+                    << std::endl;
+          exit(0);
+        }
+      }
+    } else {
+      UsageMessage(argv[0]);
+      std::cerr << "Unknown option '" << argv[argindex] << "'" << std::endl;
+      exit(0);
+    }
+  }
+
+  if (argindex == 1 || argindex != argc) {
+    UsageMessage(argv[0]);
+    exit(0);
+  }
+}
+
+void UsageMessage(const char *command) {
+  std::cout
+      << "Usage: " << command
+      << " [options]\n"
+         "Options:\n"
+         "  -load: run the loading phase of the workload\n"
+         "  -t: run the transactions phase of the workload\n"
+         "  -run: same as -t\n"
+         "  -threads n: execute using n threads (default: 1)\n"
+         "  -db dbname: specify the name of the DB to use (default: basic)\n"
+         "  -p name=value: specify a property to be passed to the DB and "
+         "workloads\n"
+         "                 multiple properties can be specified, and "
+         "override "
+         "any\n"
+         "                 values in the propertyfile\n"
+         "  -s: print status every 10 seconds (use status.interval prop to "
+         "override)"
+      << std::endl;
+}
+
+inline bool StrStartWith(const char *str, const char *pre) {
+  return strncmp(str, pre, strlen(pre)) == 0;
+}

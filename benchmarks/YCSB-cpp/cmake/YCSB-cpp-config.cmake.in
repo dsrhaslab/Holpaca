@@ -1,0 +1,19 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+set_and_check(YCSB_CPP_INCLUDE_DIR "@PACKAGE_INCLUDE_INSTALL_DIR@")
+set_and_check(YCSB_CPP_CMAKE_DIR "@PACKAGE_CMAKE_INSTALL_DIR@")
+
+find_dependency(holpaca)
+find_dependency(rocksdb)
+
+if (NOT TARGET YCSB-cpp)
+  include("${YCSB_CPP_CMAKE_DIR}/YCSB-cpp-targets.cmake")
+endif()
+
+set(YCSB-cpp_LIBRARIES)
+
+if (NOT YCSB-cpp_FIND_QUIETLY)
+  message(STATUS "Found YCSB-cpp: ${PACKAGE_PREFIX_DIR}")
+endif()

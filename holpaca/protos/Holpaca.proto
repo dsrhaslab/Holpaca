@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+// holpaca defines the namespace for all cache orchestration APIs.
+package holpaca;
+
+// AgentRPC is implemented by Holpaca agents.
+// It exposes control and monitoring operations for cachelib instances
+service AgentRPC {
+  // Resize grows or shrinks cache pools.
+  // Pool sizes are provided as a map from pool ID to desired target size.
+  rpc Resize(ResizeRequest) returns (ResizeResponse) {}
+
+  // GetStatus returns the current cache and pool-level status
+  // including capacity, utilization, and performance metrics.
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}
+}
+
+// OrchestratorRPC is implemented by the orchestrator.
+// It allows agents to register and unregister themselves.
+service OrchestratorRPC {
+  // Connect registers an agent with the orchestrator.
+  rpc Connect(ConnectRequest) returns (ConnectResponse) {}
+
+  // Disconnect unregisters an agent from the orchestrator.
+  rpc Disconnect(DisconnectRequest) returns (DisconnectResponse) {}
+}
+
+// ResizeRequest specifies desired sizes for cachelib pools.
+message ResizeRequest {
+  // Mapping from pool ID to target size in bytes.
+  map<int32, uint64> poolSizes = 1;
+}
+
+
+// ResizeResponse is empty and indicates successful completion.
+message ResizeResponse {}
+
+// GetStatusRequest is empty and requests current cache status.
+message GetStatusRequest {}
+
+// GetStatusResponse contains the current cache status.
+message GetStatusResponse {
+  // Aggregate status of the cache and its pools.
+  CacheStatus cacheStatus = 1;
+}
+
+// PoolStatus describes runtime metrics for a single cache pool.
+message PoolStatus {
+  // Unique identifier of the pool.
+  int32 poolId = 1;
+
+  // Maximum configured size of the pool.
+  uint64 maxSize = 2;
+
+  // Currently used size of the pool.
+  uint64 usedSize = 3;
+
+  // Disk I/O operations per second.
+  uint32 diskIOPS = 4;
+
+  // Data throughput (implementation-defined units).
+  uint32 throughput = 5;
+
+  // Cache miss ratio for this pool.
+  double missRatio = 6;
+
+  // Minimum throughput required to meet QoS targets.
+  double qos = 7;
+
+  // FOR MOTIVATION ONLY: Proportion that this pool must maintain within its instance.
+  double proportion = 8;
+
+  // Miss Ratio Curve (MRC), mapping cache size to miss ratio.
+  map<uint64, double> mrc = 9;
+}
+
+// CacheStatus describes the overall cache state.
+message CacheStatus {
+  // Status of individual pools, keyed by pool ID.
+  map<int32, PoolStatus> pools = 1;
+
+  // Maximum total cache size.
+  uint64 maxSize = 2;
+
+  // FOR MOTIVATION ONLY: Proportion that this cache must maintain relative to other caches.
+  double proportion = 3;
+}
+
+// ConnectRequest identifies an agent by address.
+message ConnectRequest {
+  // Network address of the agent.
+  string cacheAddress = 1;
+}
+
+// ConnectResponse is empty and indicates successful registration.
+message ConnectResponse {}
+
+// DisconnectRequest identifies an agent to remove.
+message DisconnectRequest {
+  // Network address of the agent.
+  string cacheAddress = 1;
+}
+
+// DisconnectResponse is empty and indicates successful deregistration.
+message DisconnectResponse {}

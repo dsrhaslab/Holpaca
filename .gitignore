@@ -1,0 +1,23 @@
+# Build artifacts
+build-*
+opt/
+
+# C/C++ tooling
+.ccls-cache/
+
+# External dependencies 
+external/
+
+# Benchmarks outputs
+benchmarks/results/
+
+# Python caches
+**/__pycache__/
+**/*.py[cod]
+
+# Large trace data
+benchmarks/twitter-traces/cluster*
+
+# C++ generated protobuf files
+holpaca/protos/*.cc
+holpaca/protos/*.h
