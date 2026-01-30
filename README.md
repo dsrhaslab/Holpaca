@@ -86,7 +86,7 @@ update-alternatives --set g++ /usr/bin/g++-11
 
 ## Steps to download, install, and test Holpaca
 
-1. Clone the Holpaca repository via SSH or HTTPS:
+#### Clone the Holpaca repository
 
 ```bash
 git clone git@github.com:dsrhaslab/Holpaca.git
@@ -96,7 +96,7 @@ git clone https://github.com/dsrhaslab/Holpaca.git
 cd Holpaca
 ```
 
-2. Build the docker/singularity image
+#### 📦 Build the docker/singularity image
 
 The artifacts are provided with both Docker and Singularity/Apptainer images. The Singularity/Apptainer is ready for HPC environments. To easy testing, we recommend using the Docker image.
 
@@ -140,7 +140,7 @@ singularity run holpaca.sif python3 build.py -i -a -j4 --with-benchmarks -v
 
 > **Note:** The `-j` flag controls the number of parallel make jobs. 
 
-3. 🚀 Running the systems
+#### 🚀 Running the systems
 
 All experiments must be executed **inside the provided Docker container**.  
 The general workflow is:
