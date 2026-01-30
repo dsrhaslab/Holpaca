@@ -1,24 +1,30 @@
-# Holpaca Artifact Evaluation
+# ICPE 2026 Artifact Evaluation for Holpaca (#173)
 
-## Overview
+## 📖 Introduction to Holpaca
 
-**Holpaca** is a cache management framework designed to dynamically optimize cache allocation across multiple pools, while integrating with an orchestrator via gRPC. This artifact provides:
+**Overview:** 
+Holpaca is a general-purpose caching middleware that improves the performance and resource efficiency of shared caching environments. Holpaca extends [CacheLib](https://github.com/facebook/CacheLib)’s design by introducing two complementary components: a *data layer*, co-located with each CacheLib instance, which acts as a shim layer between the application and the host caching system to continuously resize the underlying caching blocks; and a *centralized orchestrator* with system-wide visibility, that continuously monitors performance characteristics among the different tenants/instances and dynamically reallocates
+memory according to a configurable optimization goal (*e.g.,* maximizing throughput, or ensuring performance isolation).
 
-- Control-plane algorithms for cache resizing and performance maximization.  
-- Data-plane implementations with CacheLib-based allocators.  
+This artifact is organized with the following contributions:
+- Data layer implementation within CacheLib;  
+- Centralized orchestrator with two control algorithms for performance maximization and QoS enforcement;  
 - Benchmarks and evaluation scripts for performance analysis.  
 
-## Hardware and OS Configurations
+<p align="center"> <img src=".docs/holpaca-architecture.svg" alt="Holpaca high-level architecture" width="600"/> </p>
 
-Experiments were conducted on the following setup:
 
-- **CPU:** 2 × 64-core AMD EPYC 7742  
+##  Execution environment
+
+### 🖥️ Hardware and OS specifications
+The experiments in the paper were conducted in compute nodes of the Deucalion supercomputer, with the following configuration:
+- **CPU:** 2× 64-core AMD EPYC 7742  
 - **Memory:** 256 GiB RAM  
 - **Storage:** 480 GiB SSD  
-- **Operating System:** RockyLinux 8  
+- **Operating System:** RockyLinux 8, with kernel 
 
+💡 **Note:** Holpaca is not tied to any specific hardware, and can run on commodity servers as well. Nevertheless, results may differ from those reported in the paper.
 
-The settings used in our experiments were chosen to match the capacities of the compute nodes on Deucalion. You may override these settings, especially if your hardware capabilities are lower. However, results may differ significantly from those reported in the paper, as these setups typically require substantial time to fully warm up and for the optimization and control decisions to impact system performance.
 
 ## Dependencies
 
