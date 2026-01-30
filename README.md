@@ -17,22 +17,56 @@ Experiments were conducted on the following setup:
 - **Storage:** 480 GiB SSD  
 - **Operating System:** RockyLinux 8  
 
+
+The settings used in our experiments were chosen to match the capacities of the compute nodes on Deucalion. You may override these settings, especially if your hardware capabilities are lower. However, results may differ significantly from those reported in the paper, as these setups typically require substantial time to fully warm up and for the optimization and control decisions to impact system performance.
+
 ## Dependencies
 
 Holpaca requires several system and external dependencies:
 
 ### System Dependencies
 
-The project can be built on **Ubuntu 24.04** using the following packages:
+Holpaca relies on the following external projects:
+
+| Dependency | Version / Ref    | Notes                      |
+| ---------- | ---------------- | -------------------------- |
+| cachelib   | v20240320_stable | Cache allocator library    |
+| grpc       | v1.50.1          | gRPC framework             |
+| shards     | latest           | MRC generation engine      |
+| gsl        | 20211111         | Guidelines Support Library |
+| rocksdb    | v6.15.5          | Key-value storage engine   |
+
+> Note 1: `rocksdb` is only required for benchmarking purposes.
+> Note 2: We run a patch for CacheLib in `PoolResizer::work()`.
+
+However, to build CacheLib and gRPC from source, additional system packages are needed.
+For **Ubuntu 24.04**, install the following packages:
 
 ```bash
-binutils-dev, bison, build-essential, cmake, flex, gdb, git, libaio-dev,
+binutils-dev, bison, build-essential, cmake, flex, libaio-dev,
 libboost-all-dev, libbz2-dev, libdouble-conversion-dev, libdwarf-dev,
 libelf-dev, libevent-dev, libfast-float-dev, libgflags-dev, libgoogle-glog-dev,
 libiberty-dev, libjemalloc-dev, liblz4-dev, liblzma-dev, libnuma-dev,
 libsnappy-dev, libsodium-dev, libssl-dev, libunwind-dev, liburing-dev, make,
-pkg-config, pv, python3, python3-pip, wget, zlib1g-dev, zstd
+pkg-config, zlib1g-dev
 ```
+
+Furthermore, to build CacheLib we also need to install the following external projects:
+
+| Dependency | Version / Ref    | Notes                      |
+| ---------- | ---------------- | -------------------------- |
+| zstd       | v1.5.6           | Compression library        |
+| googletest | v1.15.2          | Testing framework          |
+| glog       | v0.5.0           | Logging library            |
+| gflags     | v2.2.2           | Command-line flags         |
+| fmt        | 10.2.1           | Formatting library         |
+| sparsemap  | v0.6.2           | Sparse map data structures |
+| folly      | commit 17be1d    | Facebook utility library   |
+| fizz       | commit 5576ab83  | TLS library                |
+| wangle     | commit 0c80d9e   | Networking library         |
+| mvfst      | commit aa7ac3    | QUIC implementation        |
+| fbthrift   | commit c21dccc   | Thrift RPC library         |
+
 
 Set GCC/G++ 11 as default compilers:
 
@@ -48,26 +82,8 @@ update-alternatives --set g++ /usr/bin/g++-11
 
 Holpaca relies on the following external projects:
 
-| Dependency | Version / Ref    | Notes                      |
-| ---------- | ---------------- | -------------------------- |
-| zstd       | v1.5.6           | Compression library        |
-| googletest | v1.15.2          | Testing framework          |
-| glog       | v0.5.0           | Logging library            |
-| gflags     | v2.2.2           | Command-line flags         |
-| fmt        | 10.2.1           | Formatting library         |
-| sparsemap  | v0.6.2           | Sparse map data structures |
-| folly      | commit 17be1d    | Facebook utility library   |
-| fizz       | commit 5576ab83  | TLS library                |
-| wangle     | commit 0c80d9e   | Networking library         |
-| mvfst      | commit aa7ac3    | QUIC implementation        |
-| fbthrift   | commit c21dccc   | Thrift RPC library         |
-| cachelib   | v20240320_stable | Cache allocator library    |
-| grpc       | v1.50.1          | gRPC framework             |
-| shards     | latest           | MRC generation engine      |
-| gsl        | 20211111         | Guidelines Support Library |
 | rocksdb    | v6.15.5          | Key-value storage engine   |
 
-> Note: Some dependencies require additional CMake arguments or pre-build modifications (e.g., CacheLib patch for `PoolResizer::work()`).
 
 ---
 
@@ -196,20 +212,5 @@ singularity run ../holpaca.sif python3 download.py
 
 > These traces are capped to a limited number of operations due to their size. Depending on your network connection, the download may take between 30 minutes and 1 hour.
 
----
-
-## Notes
-
-* Benchmarks require Python dependencies, installed via:
-
-```bash
-pip3 install --break-system-packages -r benchmarks/requirements.txt
-```
-
-You shouldn't need to install these manually, as they are included in the Docker and Singularity builds.
 
 ---
-
-# Disclaimer
-
-The settings used in our experiments were chosen to match the capacities of the compute nodes on Deucalion. You may override these settings, especially if your hardware capabilities are lower. However, results may differ significantly from those reported in the paper, as these setups typically require substantial time to fully warm up and for the optimization and control decisions to impact system performance.
