@@ -100,7 +100,8 @@ cd Holpaca
 
 The artifacts are provided with both Docker and Singularity/Apptainer images. The Singularity/Apptainer is ready for HPC environments. To easy testing, we recommend using the Docker image.
 
-**Using Docker [⚠️ This step will take approximately 1 hour, depending on the hardware]:**
+**Using Docker**
+> ⚠️ This step will take approximately 1 hour, depending on the hardware
 
 ```bash
 docker build --build-arg MAKE_JOBS=4 -t holpaca .
@@ -115,7 +116,8 @@ export DOCKER_TMP=/path/to/another/dir
 This builds the full project including benchmarks.
 
 
-**Using Singularity/Apptainer [⚠️ This step will take approximately 1 hour, depending on the hardware]:**
+**Using Singularity/Apptainer** 
+> ⚠️ This step will take approximately 1 hour, depending on the hardware
 
 First, we need to install the dependencies. This process will install the project directly on the host filesystem without containerizing it.
 
@@ -138,12 +140,16 @@ singularity run holpaca.sif python3 build.py -i -a -j4 --with-benchmarks -v
 
 > **Note:** The `-j` flag controls the number of parallel make jobs. 
 
+3. 🚀 Running the systems
 
----
+All experiments must be executed **inside the provided Docker container**.  
+The general workflow is:
 
-## Running Benchmarks
+1. Start the container  (if not already started)
+2. Run experiments 
+3. Evaluate results and generate figures  
 
-### Docker
+**Using Docker:**
 
 To run the experiments using Docker, start an interactive container:
 
@@ -163,42 +169,57 @@ Next, navigate to the `benchmarks/twitter_traces` directory and download the Twi
 cd /Holpaca/benchmarks/twitter_traces
 python3 download.py
 ```
-These traces are capped to a limited number of operations due to their size. Nevertheless, the download script will result on 35GB of traces (including a version with unique keys only, `*-keyed`, needed for the loading phase).
+
+We limit the trace size by the number of operations (otherwise, experiments would take several hours). Nevertheless, the download script will result on 35GB of traces (including a version with unique keys only, `*-keyed`, needed for the loading phase).
 
 After downloading the traces, you can run the experiments.
 Experiments are located on the `benchmarks/experiments` directory.
 
-The `benchmarks/experiments/main.py` scripts allows you to choose what experiment to run (optionally with specific paremeters).
+The `benchmarks/experiments/main.py` scripts allows you to choose what experiment to run (optionally with specific parameters).
+
+**Main experiments:** 
 
 To run the experiments with default parameters (as in the paper), execute:
 
 ```bash
 cd /Holpaca/benchmarks
+
+# 5.1 Single instance with multiple tenants (Figure 5)
 python3 experiments/main.py use_case_1 -t twitter_traces 
+
+# 5.2 Multiple instances (Figure 6)
 python3 experiments/main.py use_case_2 -t twitter_traces
+
+# 5.3 Per-instance QoS guarantees (Figure 7)
 python3 experiments/main.py use_case_3 -t twitter_traces
+```
+> Note: these scripts will generate the output logs. Check the visualization commands below for generating the plots.
+> ⚠️ Each test will take approximately 1.5 hours per setup ((loading time (0.5) + execution time (1)) * setups (3) = approximately 4.5 hours)
+
+These scripts execute all setups (`baseline`, `optimizer`, and `holpaca`) sequentially, each with a duration of loading phase (populating the storage backend) and approximately an hour of a running phase. 
+To test each individual setup, use the `-s` flag with the corresponding system name, namely `baseline`, `optimizer`, `holpaca`.
+
+Additionally, to run shorter experiments, you can use the `-m` to set the maximum execution time (in seconds) of the running phase (*i.e.,* not applicable to the loading phase). For example, to run for only 5 minutes add the flag `-m 300`. 
+> Note: using a shorter execution time might lead to different results from those observed in the paper, due to cache warmup and incomplete trace replaying.
+
+**Holpaca's overhead:**
+
+To reproduce the overhead experiments, use the following scripts:
+
+```bash
+# Figure 8
 python3 experiments/main.py agent_overhead 
+
+# Table 1
 python3 experiments/main.py orchestrator_algorithm_latency_breakdown
+
+# Table 2
 python3 experiments/main.py orchestrator_control_interval
 ```
 
-The `use_case` experiments run three different setups (`baseline`, `optimizer`, and `holpaca`), each with a duration of loading phase (populating the storage backend) and about an hour of a running phase. The `-t` flag specifies the (relative) path to the traces directory (by default, it is `Holpaca/benchmarks/twitter_traces`).
+The overhead experiments (`agent_overhead`, `orchestrator_algorithm_latency_breakdown`, and `orchestrator_control_interval`) have durations of 10 minutes, but include at least 60 setups each. 
 
-The overhead experiments (`agent_overhead`, `orchestrator_algorithm_latency_breakdown`, and `orchestrator_control_interval`) have durations of 10 minutes, but include at least 60 setups each.
-
-To run shorter experiments, you can use the `-m` to set the maximum execution time (in seconds) of the running phase (i.e., not applicable to the loading phase). For example, to run for only 5 minutes:
-
-```bash
-python3 experiments/main.py use_case_1 -t twitter_traces -m 300
-python3 experiments/main.py use_case_2 -t twitter_traces -m 300
-python3 experiments/main.py use_case_3 -t twitter_traces -m 300
-```
-
-We also provide a flag to run only a specific setup within the experiment. For example, to run only the `holpaca` setup of use-case 1:
-
-```bash
-python3 experiments/main.py use_case_1 -t twitter_traces -s holpaca
-```
+📈 **Output and visualization:**
 
 The results of the experiments will be, by default, stored in the `benchmarks/results` directory. 
 To visualize the results, you can use the provided plotting scripts in the `benchmarks/plots` directory.
@@ -206,35 +227,29 @@ To visualize the results, you can use the provided plotting scripts in the `benc
 All scripts take as input the path to the results directory. Please be sure to use the script that matches the experiment you ran. 
 
 ```bash
+# Figure 5
 python3 plots/use_case_1.py results/use_case_1
+
+# Figure 6
 python3 plots/use_case_2.py results/use_case_2
+
+# Figure 7
 python3 plots/use_case_3.py results/use_case_3
+
+# Figure 8
 python3 plots/agent_overhead.py results/agent_overhead
-python3 plots/orchestrator_algorithm_latency_breakdown.py results/orchestrator_algorithm_latency_breakdown
-python3 plots/orchestrator_control_interval.py results/orchestrator_control_interval
 ```
-> Note: For the orchestrator experiments, the script will only print the values to the stdout.
+> **Note:** these plotting scripts assume the results/logs from **all setups** are available. Trying to plot incomplete results may lead to errors. 
 
-Important: these plotting scripts assume that are results from all the setups of their corresponding experiments. Trying to plot incomplete results may lead to errors.
-Additionally, the plotting scripts will result on plots slightly different from those in the paper, to ensure that if configurations were changed (e.g., experiment duration), the plots will still allow you to visualize the results. 
+**Motivation:**
 
-Note: we also provide scripts to run and plot the motivation experiments (`motivation_1` and `motivation_2`).
+We also provide scripts to run and plot the motivation experiments (`motivation_1` and `motivation_2`).
 
-### Singularity
+*** 
 
-While still in the Holpaca project:
+**Using Singularity/Apptainer:**
 
-```bash
-cd benchmarks/twitter_traces
-```
-
-To run the use-case experiments, you will need to download the Twitter traces:
-
-```bash
-singularity run ../holpaca.sif python3 download.py
-```
-
-> These traces are capped to a limited number of operations due to their size. Nevertheless, the download script will result on 35GB of traces (including a version with unique keys only, `*-keyed`, needed for the loading phase).
+To run Holpaca with Singularity/Apptainer, refer to the file [Run with singularity](.docs/run-singularity.md).
 
 
 ---
