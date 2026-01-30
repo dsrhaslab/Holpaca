@@ -1,6 +1,9 @@
 # ICPE 2026 Artifact Evaluation for Holpaca (#173)
 
 <p align="center"> <img src=".docs/holpaca-logo-transparent.png"/> </p>
+<p align="center">
+  <sub><em>Artwork generated with the assistance of ChatGPT (OpenAI).</em></sub>
+</p>
 
 ## 📖 Introduction to Holpaca
 
