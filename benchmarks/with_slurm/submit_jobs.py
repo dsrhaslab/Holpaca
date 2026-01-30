@@ -2,8 +2,8 @@ import argparse
 
 from experiments.main import EXPERIMENTS
 
-ACCOUNT = "I20240005X"
-PARTITION = "large-x86"
+ACCOUNT = # your_account_name
+PARTITION =  # the_target_partition
 
 CWD = Path(__file__).parent.resolve().absolute()
 SRCDIR = CWD / ".." / ".."

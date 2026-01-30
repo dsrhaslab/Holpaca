@@ -17,3 +17,8 @@ benchmarks/results/
 
 # Large trace data
 benchmarks/twitter-traces/cluster*
+
+# Protobuf generated files
+**/*.pb.cc
+**/*.pb.h
+
