@@ -1,5 +1,7 @@
 # ICPE 2026 Artifact Evaluation for Holpaca (#173)
 
+<p align="center"> <img src=".docs/holpaca-logo-transparent.png"/> </p>
+
 ## 📖 Introduction to Holpaca
 
 **Overview:** 
