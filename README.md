@@ -225,28 +225,3 @@ We also provide scripts to run and plot the motivation experiments (`motivation_
 
 To run Holpaca with Singularity/Apptainer, refer to the file [Run with singularity](.docs/run-singularity.md).
 
-**Using Singularity/Apptainer** 
-> ⚠️ This step will take approximately 1 hour, depending on the hardware
-
-First, we need to install the dependencies. This process will install the project directly on the host filesystem without containerizing it.
-
-```bash
-# Requires `sudo` to install system dependencies.
-sudo singularity build holpaca.sif singularity.def
-```
-
-If Singularity runs out of space, specify an alternative temporary directory before the build:
-
-```bash
-sudo singularity --tmpdir=/path/to/other/tmpdir build holpaca.sif singularity.def
-```
-
-Second, we need to build the project using the Singularity image:
-
-```bash
-singularity run holpaca.sif python3 build.py -i -a -j4 --with-benchmarks -v
-```
-
-> **Note:** The `-j` flag controls the number of parallel make jobs. 
-
----
