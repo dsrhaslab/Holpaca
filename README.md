@@ -17,36 +17,34 @@ This artifact is organized with the following contributions:
 ##  Execution environment
 
 ### 🖥️ Hardware and OS specifications
-The experiments in the paper were conducted in compute nodes of the Deucalion supercomputer, with the following configuration:
+The experiments in the paper were conducted in compute nodes of the [Deucalion](https://docs.macc.fccn.pt/deucalion/) supercomputer, with the following configuration:
 - **CPU:** 2× 64-core AMD EPYC 7742  
 - **Memory:** 256 GiB RAM  
 - **Storage:** 480 GiB SSD  
-- **Operating System:** RockyLinux 8, with kernel 
+- **Operating System:** RockyLinux 8, with kernel 4.18.0-348.el8.0.2.x86_64
 
-💡 **Note:** Holpaca is not tied to any specific hardware, and can run on commodity servers as well. Nevertheless, results may differ from those reported in the paper.
+💡 **Note:** Holpaca is not tied to any specific hardware, and can run on commodity servers as well (for example, 6-core Intel i6 processor, 16 GiB RAM, 256 GiB SSD, with Ubuntu 24.04). Nevertheless, results may differ from those reported in the paper.
 
 
-## Dependencies
+### Dependencies
 
-Holpaca requires several system and external dependencies:
+Holpaca requires the following system and external dependencies:
 
-### System Dependencies
+#### System Dependencies
 
 Holpaca relies on the following external projects:
 
 | Dependency | Version / Ref    | Notes                      |
 | ---------- | ---------------- | -------------------------- |
-| cachelib   | v20240320_stable | Cache allocator library    |
+| cachelib   | v20240320_stable | CacheLib library           |
 | grpc       | v1.50.1          | gRPC framework             |
 | shards     | latest           | MRC generation engine      |
 | gsl        | 20211111         | Guidelines Support Library |
 | rocksdb    | v6.15.5          | Key-value storage engine   |
 
-> Note 1: `rocksdb` is only required for benchmarking purposes.
-> Note 2: We run a patch for CacheLib in `PoolResizer::work()`.
+> Notes: `rocksdb` is only required for benchmarking purposes. Further, we run a patch for CacheLib in `PoolResizer::work()`.
 
-However, to build CacheLib and gRPC from source, additional system packages are needed.
-For **Ubuntu 24.04**, install the following packages:
+To build CacheLib and gRPC from source, additional system packages are needed (already included in the container). For **Ubuntu 24.04**, install the following packages:
 
 ```bash
 binutils-dev, bison, build-essential, cmake, flex, libaio-dev,
@@ -57,7 +55,7 @@ libsnappy-dev, libsodium-dev, libssl-dev, libunwind-dev, liburing-dev, make,
 pkg-config, zlib1g-dev
 ```
 
-Furthermore, to build CacheLib we also need to install the following external projects:
+To build CacheLib we also need to install the following external projects:
 
 | Dependency | Version / Ref    | Notes                      |
 | ---------- | ---------------- | -------------------------- |
@@ -84,18 +82,11 @@ update-alternatives --set gcc /usr/bin/gcc-11
 update-alternatives --set g++ /usr/bin/g++-11
 ```
 
-### External Project Dependencies
-
-Holpaca relies on the following external projects:
-
-| rocksdb    | v6.15.5          | Key-value storage engine   |
-
-
 ---
 
-## Cloning Holpaca
+## Steps to download, install, and test Holpaca
 
-Clone the repository via SSH or HTTPS:
+1. Clone the Holpaca repository via SSH or HTTPS:
 
 ```bash
 git clone git@github.com:dsrhaslab/Holpaca.git
@@ -105,94 +96,48 @@ git clone https://github.com/dsrhaslab/Holpaca.git
 cd Holpaca
 ```
 
----
+2. Build the docker/singularity image
 
-## Building Holpaca
+The artifacts are provided with both Docker and Singularity/Apptainer images. The Singularity/Apptainer is ready for HPC environments. To easy testing, we recommend using the Docker image.
 
-Holpaca can be built using the included `build.py` script.
-
-### `build.py` Arguments
-
-| Argument            | Description                                                         |
-| ------------------- | ------------------------------------------------------------------- |
-| `-i`                | Install dependencies and targets                                    |
-| `-j<n>`             | Number of make jobs for parallel compilation                        |
-| `-v`                | Enable verbose output                                               |
-| `-p <path>`         | Set installation prefix (default: `./opt/holpaca`)                  |
-| `--with-benchmarks` | Build benchmarks                                                    |
-| `-d`                | Build in debug mode                                                 |
-| `-a`                | Build/install all dependencies                                      |
-| `-b <deps>`         | Build/install only a specific list of dependencies (overrides `-a`) |
-
----
-
-### Recommended Build Methods
-
-For both cases, building the full project (including dependencies) may take up to **1 hour** depending on the hardware.
-
-#### 1. Docker Build
-
-Docker ensures a consistent environment and avoids host dependency issues:
-
-```bash
-docker build -t holpaca .
-```
-
-By default, the number of make jobs is 4. To customize, use the `MAKE_JOBS` build argument:
+**Using Docker [⚠️ This step will take approximately 1 hour, depending on the hardware]:**
 
 ```bash
 docker build --build-arg MAKE_JOBS=4 -t holpaca .
 ```
 
-If Docker runs out of space, specify an alternative temporary directory:
+If Docker runs out of space, specify an alternative temporary directory before the build:
 
 ```bash
 export DOCKER_TMP=/path/to/another/dir
-docker build -t holpaca .
 ```
 
 This builds the full project including benchmarks.
 
----
 
-#### 2. Singularity Build
+**Using Singularity/Apptainer [⚠️ This step will take approximately 1 hour, depending on the hardware]:**
 
-Singularity installs the project directly on the host filesystem without containerizing it.
-
-1. Build the Singularity image locally:
+First, we need to install the dependencies. This process will install the project directly on the host filesystem without containerizing it.
 
 ```bash
+# Requires `sudo` to install system dependencies.
 sudo singularity build holpaca.sif singularity.def
 ```
 
-* Requires `sudo` to install system dependencies.
-* Default temporary directory is `/tmp`; override with `--tmpdir` if needed:
+If Singularity runs out of space, specify an alternative temporary directory before the build:
 
 ```bash
 sudo singularity --tmpdir=/path/to/other/tmpdir build holpaca.sif singularity.def
 ```
 
-2. Transfer to a supercomputer (optional, e.g., Deucalion):
+Second, we need to build the project using the Singularity image:
 
 ```bash
-ssh user@remote-host
-cd /parallel/file/system/directories
-git clone https://github.com/dsrhaslab/Holpaca
-scp path/to/holpaca.sif user@remote-host:/parallel/file/system/directories/Holpaca
-cd /parallel/file/system/directories/Holpaca
+singularity run holpaca.sif python3 build.py -i -a -j4 --with-benchmarks -v
 ```
 
-3. Build the project inside the Singularity image:
+> **Note:** The `-j` flag controls the number of parallel make jobs. 
 
-```bash
-singularity run holpaca.sif python3 build.py -i -a -j4 --with-benchmarks
-```
-
-> **Note:** The `-j` flag controls the number of parallel make jobs. On a shared login node, reduce this number if necessary to avoid impacting other users.
-
----
-
-It is important to have a good internet connection for the build to work, as the script will download all dependencies, including external projects.
 
 ---
 
