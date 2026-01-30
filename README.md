@@ -194,7 +194,80 @@ It is important to have a good internet connection for the build to work, as the
 
 ### Docker
 
-<empty for now>
+To run the experiments using Docker, start an interactive container:
+
+```bash
+docker run -it --rm holpaca /bin/bash
+```
+
+Since we need to download large trace files for the benchmarks, we advise to map volume to persist results and avoid re-downloading traces:
+
+```bash
+docker run -it --rm -v /path/on/host:/Holpaca holpaca /bin/bash
+```
+
+Next, navigate to the `benchmarks/twitter_traces` directory and download the Twitter traces:
+
+```bash
+cd /Holpaca/benchmarks/twitter_traces
+python3 download.py
+```
+These traces are capped to a limited number of operations due to their size. Nevertheless, the download script will result on 35GB of traces (including a version with unique keys only, `*-keyed`, needed for the loading phase).
+
+After downloading the traces, you can run the experiments.
+Experiments are located on the `benchmarks/experiments` directory.
+
+The `benchmarks/experiments/main.py` scripts allows you to choose what experiment to run (optionally with specific paremeters).
+
+To run the experiments with default parameters (as in the paper), execute:
+
+```bash
+cd /Holpaca/benchmarks
+python3 experiments/main.py use_case_1 -t twitter_traces 
+python3 experiments/main.py use_case_2 -t twitter_traces
+python3 experiments/main.py use_case_3 -t twitter_traces
+python3 experiments/main.py agent_overhead 
+python3 experiments/main.py orchestrator_algorithm_latency_breakdown
+python3 experiments/main.py orchestrator_control_interval
+```
+
+The `use_case` experiments run three different setups (`baseline`, `optimizer`, and `holpaca`), each with a duration of loading phase (populating the storage backend) and about an hour of a running phase. The `-t` flag specifies the (relative) path to the traces directory (by default, it is `Holpaca/benchmarks/twitter_traces`).
+
+The overhead experiments (`agent_overhead`, `orchestrator_algorithm_latency_breakdown`, and `orchestrator_control_interval`) have durations of 10 minutes, but include at least 60 setups each.
+
+To run shorter experiments, you can use the `-m` to set the maximum execution time (in seconds) of the running phase (i.e., not applicable to the loading phase). For example, to run for only 5 minutes:
+
+```bash
+python3 experiments/main.py use_case_1 -t twitter_traces -m 300
+python3 experiments/main.py use_case_2 -t twitter_traces -m 300
+python3 experiments/main.py use_case_3 -t twitter_traces -m 300
+```
+
+We also provide a flag to run only a specific setup within the experiment. For example, to run only the `holpaca` setup of use-case 1:
+
+```bash
+python3 experiments/main.py use_case_1 -t twitter_traces -s holpaca
+```
+
+The results of the experiments will be, by default, stored in the `benchmarks/results` directory. 
+To visualize the results, you can use the provided plotting scripts in the `benchmarks/plots` directory.
+
+All scripts take as input the path to the results directory. Please be sure to use the script that matches the experiment you ran. 
+
+```bash
+python3 plots/use_case_1.py results/use_case_1
+python3 plots/use_case_2.py results/use_case_2
+python3 plots/use_case_3.py results/use_case_3
+python3 plots/agent_overhead.py results/agent_overhead
+python3 plots/orchestrator_algorithm_latency_breakdown.py results/orchestrator_algorithm_latency_breakdown
+python3 plots/orchestrator_control_interval.py results/orchestrator_control_interval
+```
+> Note: For the orchestrator experiments, the script will only print the values to the stdout.
+
+Important: these plotting scripts assume that are results from all the setups of their corresponding experiments. Trying to plot incomplete results may lead to errors.
+Additionally, the plotting scripts will result on plots slightly different from those in the paper, to ensure that if configurations were changed (e.g., experiment duration), the plots will still allow you to visualize the results. 
+
+Note: we also provide scripts to run and plot the motivation experiments (`motivation_1` and `motivation_2`).
 
 ### Singularity
 
@@ -210,7 +283,7 @@ To run the use-case experiments, you will need to download the Twitter traces:
 singularity run ../holpaca.sif python3 download.py
 ```
 
-> These traces are capped to a limited number of operations due to their size. Depending on your network connection, the download may take between 30 minutes and 1 hour.
+> These traces are capped to a limited number of operations due to their size. Nevertheless, the download script will result on 35GB of traces (including a version with unique keys only, `*-keyed`, needed for the loading phase).
 
 
 ---

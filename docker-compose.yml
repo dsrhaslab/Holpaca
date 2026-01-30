@@ -1,8 +1,0 @@
-services:
-  holpaca:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    volumes:
-    - ./benchmarks/results:/Holpaca/benchmarks/results
-    - ./benchmarks/plots:/Holpaca/benchmarks/plots
