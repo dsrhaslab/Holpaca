@@ -123,14 +123,6 @@ def plot(
 
     for i, (setup, metrics) in enumerate(throughput_per_setup.items()):
         for j, values in enumerate(metrics):
-            print(f"[{setup}][{THREAD_NAMES[j]}] Max throughput: {max(values)}")
-            print(f"[{setup}][{THREAD_NAMES[j]}] Avg throughput: {np.mean(values)}")
-            print(
-                f"[{setup}][{THREAD_NAMES[j]}] Max memory: {max(memory_capacity_per_setup[setup][j])}"
-            )
-            print(
-                f"[{setup}][{THREAD_NAMES[j]}] Max used memory: {max(memory_used_per_setup[setup][j])}"
-            )
 
             # If time series is shorter than max_time, pad with zeros
             values[len(values) : max_time] = [0] * (max_time - len(values))

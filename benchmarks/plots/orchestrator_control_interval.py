@@ -77,7 +77,6 @@ def main():
                         header=None,
                     )
                     cpu.append(df["usr"].mean())
-                print(f"[{setupType}][{thread}][{freq}]: {np.mean(cpu)}")
 
 
 if __name__ == "__main__":
