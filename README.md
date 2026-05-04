@@ -18,6 +18,19 @@ This artifact is organized with the following contributions:
 
 <p align="center"> <img src=".docs/holpaca-architecture.svg" alt="Holpaca high-level architecture" width="600"/> </p>
 
+If you use Holpaca, please cite our ICPE 2026 paper:
+
+```bibtex
+@inproceedings{Holpaca:2026:Peixoto,
+  title     = {{Holpaca: Holistic and Adaptable Cache Management for Shared Environments}},
+  author    = {Peixoto, Jos\'{e} Pedro and Gonzalez, Alexis and Bhimani, Janki and Rangaswami, Raju and Brito, Cl\'{a}udia and Paulo, Jo\~{a}o and Macedo, Ricardo},
+  booktitle = {{Proceedings of the 17th ACM/SPEC International Conference on Performance Engineering}},
+  year      = {2026},
+  pages     = {378–390},
+  publisher = {ACM},
+  doi       = {10.1145/3777884.3797013},
+}
+```
 
 ## 🖥️ Hardware and OS specifications of the reported experiments
 
